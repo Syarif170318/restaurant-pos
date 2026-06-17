@@ -1,0 +1,6 @@
+// Override lewat pos-mobile/.env → EXPO_PUBLIC_API_BASE_URL
+// Android Emulator: http://10.0.2.2:3001
+// iOS Simulator:     http://localhost:3001
+// HP fisik (WiFi):   http://192.168.x.x:3001
+export const API_BASE_URL =
+  process.env.EXPO_PUBLIC_API_BASE_URL ?? "http://10.0.2.2:3001";
