@@ -1,0 +1,553 @@
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "mysql"
+}
+
+enum UserRole {
+  admin
+  manager
+  cashier
+  waiter
+  kitchen
+  inventory
+}
+
+enum TableStatus {
+  available
+  occupied
+  reserved
+}
+
+enum OrderType {
+  dine_in
+  takeaway
+}
+
+enum OrderStatus {
+  draft
+  confirmed
+  preparing
+  ready
+  served
+  paid
+  void
+}
+
+enum OrderItemStatus {
+  pending
+  preparing
+  ready
+  served
+}
+
+enum PaymentMethod {
+  cash
+  card
+  digital_wallet
+}
+
+enum PaymentStatus {
+  pending
+  completed
+  refunded
+}
+
+enum ReceiptType {
+  print
+  email
+}
+
+enum StockMovementType {
+  in
+  out
+  adjustment
+}
+
+enum ShiftStatus {
+  open
+  closed
+}
+
+enum OrderSource {
+  pos
+  qr_menu
+}
+
+enum LoyaltyTxnType {
+  earn
+  redeem
+}
+
+enum ReservationStatus {
+  pending
+  confirmed
+  seated
+  cancelled
+}
+
+enum PurchaseOrderStatus {
+  draft
+  sent
+  received
+  cancelled
+}
+
+enum DeliveryPlatform {
+  gofood
+  grabfood
+  manual
+}
+
+enum DeliveryOrderStatus {
+  pending
+  accepted
+  preparing
+  ready
+  delivered
+  cancelled
+}
+
+model Outlet {
+  id        String   @id @default(cuid())
+  name      String
+  code      String?  @unique
+  address   String?
+  isActive  Boolean  @default(true) @map("is_active")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  users           User[]
+  tables          Table[]
+  orders          Order[]
+  shifts          Shift[]
+  ingredientStocks IngredientStock[]
+  stockMovements  StockMovement[]
+  customers       Customer[]
+  reservations    Reservation[]
+  purchaseOrders  PurchaseOrder[]
+  deliveryOrders  DeliveryOrder[]
+
+  @@map("outlets")
+}
+
+model User {
+  id           String   @id @default(cuid())
+  username     String   @unique
+  passwordHash String   @map("password_hash")
+  fullName     String   @map("full_name")
+  role         UserRole
+  pinCode      String?  @map("pin_code")
+  isActive     Boolean  @default(true) @map("is_active")
+  createdAt    DateTime @default(now()) @map("created_at")
+  updatedAt    DateTime @updatedAt @map("updated_at")
+
+  outletId String @map("outlet_id")
+  outlet   Outlet @relation(fields: [outletId], references: [id])
+
+  ordersCreated    Order[]           @relation("OrderCreator")
+  payments         Payment[]
+  stockMovements   StockMovement[]
+  transactionLogs  TransactionLog[]
+  shifts           Shift[]
+  loginAudits      LoginAudit[]
+
+  @@map("users")
+}
+
+model Table {
+  id          String      @id @default(cuid())
+  tableNumber String      @map("table_number")
+  capacity    Int
+  area        String      @default("Indoor")
+  status      TableStatus @default(available)
+  isActive    Boolean     @default(true) @map("is_active")
+
+  outletId String @map("outlet_id")
+  outlet   Outlet @relation(fields: [outletId], references: [id])
+
+  orders       Order[]
+  reservations Reservation[]
+
+  @@map("tables")
+  @@unique([outletId, tableNumber])
+}
+
+model MenuCategory {
+  id            String     @id @default(cuid())
+  name          String
+  sortOrder     Int        @default(0) @map("sort_order")
+  isActive      Boolean    @default(true) @map("is_active")
+  availableFrom String?    @map("available_from")
+  availableTo   String?    @map("available_to")
+  items         MenuItem[]
+
+  @@map("menu_categories")
+}
+
+model MenuItem {
+  id          String   @id @default(cuid())
+  categoryId  String   @map("category_id")
+  name        String
+  description String?
+  price         Float
+  takeawayPrice Float?  @map("takeaway_price")
+  imageUrl      String? @map("image_url")
+  availableFrom String? @map("available_from")
+  availableTo   String? @map("available_to")
+  isAvailable Boolean  @default(true) @map("is_available")
+  station     String   @default("grill")
+  isActive    Boolean  @default(true) @map("is_active")
+
+  category   MenuCategory    @relation(fields: [categoryId], references: [id])
+  modifiers  MenuModifier[]
+  orderItems OrderItem[]
+  recipes    Recipe[]
+
+  @@map("menu_items")
+}
+
+model MenuModifier {
+  id         String @id @default(cuid())
+  menuItemId String @map("menu_item_id")
+  name       String
+  extraPrice Float  @default(0) @map("extra_price")
+
+  menuItem          MenuItem           @relation(fields: [menuItemId], references: [id])
+  orderItemModifiers OrderItemModifier[]
+
+  @@map("menu_modifiers")
+}
+
+model Customer {
+  id            String   @id @default(cuid())
+  phone         String   @unique
+  name          String
+  loyaltyPoints Int      @default(0) @map("loyalty_points")
+  outletId      String?  @map("outlet_id")
+  createdAt     DateTime @default(now()) @map("created_at")
+  updatedAt     DateTime @updatedAt @map("updated_at")
+
+  outlet       Outlet?              @relation(fields: [outletId], references: [id])
+  orders       Order[]
+  transactions LoyaltyTransaction[]
+
+  @@map("customers")
+}
+
+model LoyaltyTransaction {
+  id         String         @id @default(cuid())
+  customerId String         @map("customer_id")
+  orderId    String?        @map("order_id")
+  type       LoyaltyTxnType
+  points     Int
+  notes      String?
+  createdAt  DateTime       @default(now()) @map("created_at")
+
+  customer Customer @relation(fields: [customerId], references: [id])
+  order    Order?   @relation(fields: [orderId], references: [id])
+
+  @@map("loyalty_transactions")
+}
+
+model Order {
+  id              String      @id @default(cuid())
+  orderNumber     String      @unique @map("order_number")
+  orderType       OrderType   @map("order_type")
+  source          OrderSource @default(pos) @map("order_source")
+  tableId         String?     @map("table_id")
+  outletId        String      @map("outlet_id")
+  customerId      String?     @map("customer_id")
+  customerName    String?     @map("customer_name")
+  customerPhone   String?     @map("customer_phone")
+  status          OrderStatus @default(draft)
+  subtotal        Float       @default(0)
+  taxAmount       Float       @default(0) @map("tax_amount")
+  serviceCharge   Float       @default(0) @map("service_charge")
+  discountAmount  Float       @default(0) @map("discount_amount")
+  totalAmount     Float       @default(0) @map("total_amount")
+  createdById     String      @map("created_by")
+  confirmedAt     DateTime?   @map("confirmed_at")
+  paidAt          DateTime?   @map("paid_at")
+  voidReason      String?     @map("void_reason")
+  isHeld          Boolean     @default(false) @map("is_held")
+  isRush          Boolean     @default(false) @map("is_rush")
+  mergedTableIds  String?     @map("merged_table_ids")
+  invoiceNumber   String?     @unique @map("invoice_number")
+  createdAt       DateTime    @default(now()) @map("created_at")
+  updatedAt       DateTime    @updatedAt @map("updated_at")
+
+  outlet Outlet @relation(fields: [outletId], references: [id])
+
+  table           Table?           @relation(fields: [tableId], references: [id])
+  customer        Customer?        @relation(fields: [customerId], references: [id])
+  createdBy       User             @relation("OrderCreator", fields: [createdById], references: [id])
+  items           OrderItem[]
+  payments        Payment[]
+  receipts        Receipt[]
+  transactionLogs TransactionLog[]
+  loyaltyTxns     LoyaltyTransaction[]
+
+  @@map("orders")
+}
+
+model OrderItem {
+  id         String          @id @default(cuid())
+  orderId    String          @map("order_id")
+  menuItemId String          @map("menu_item_id")
+  quantity   Int
+  unitPrice  Float           @map("unit_price")
+  subtotal   Float
+  notes      String?
+  status     OrderItemStatus @default(pending)
+  isPaid     Boolean         @default(false) @map("is_paid")
+  createdAt  DateTime        @default(now()) @map("created_at")
+
+  order     Order               @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  menuItem  MenuItem            @relation(fields: [menuItemId], references: [id])
+  modifiers OrderItemModifier[]
+
+  @@map("order_items")
+}
+
+model OrderItemModifier {
+  id          String @id @default(cuid())
+  orderItemId String @map("order_item_id")
+  modifierId  String @map("modifier_id")
+  extraPrice  Float  @map("extra_price")
+
+  orderItem OrderItem    @relation(fields: [orderItemId], references: [id], onDelete: Cascade)
+  modifier  MenuModifier @relation(fields: [modifierId], references: [id])
+
+  @@map("order_item_modifiers")
+}
+
+model Payment {
+  id              String        @id @default(cuid())
+  orderId         String        @map("order_id")
+  paymentMethod   PaymentMethod @map("payment_method")
+  amount          Float
+  changeAmount    Float         @default(0) @map("change_amount")
+  referenceNumber String?       @map("reference_number")
+  status          PaymentStatus @default(completed)
+  processedById   String        @map("processed_by")
+  paidAt          DateTime      @default(now()) @map("paid_at")
+
+  order       Order @relation(fields: [orderId], references: [id])
+  processedBy User  @relation(fields: [processedById], references: [id])
+
+  @@map("payments")
+}
+
+model Receipt {
+  id            String      @id @default(cuid())
+  orderId       String      @map("order_id")
+  receiptNumber String      @unique @map("receipt_number")
+  type          ReceiptType @default(print)
+  sentTo        String?     @map("sent_to")
+  createdAt     DateTime    @default(now()) @map("created_at")
+
+  order Order @relation(fields: [orderId], references: [id])
+
+  @@map("receipts")
+}
+
+model Ingredient {
+  id            String  @id @default(cuid())
+  name          String
+  unit          String
+  minStockLevel Float   @map("min_stock_level")
+  isActive      Boolean @default(true) @map("is_active")
+
+  stocks            IngredientStock[]
+  recipes           Recipe[]
+  movements         StockMovement[]
+  purchaseOrderItems PurchaseOrderItem[]
+
+  @@map("ingredients")
+}
+
+model IngredientStock {
+  id           String   @id @default(cuid())
+  ingredientId String   @map("ingredient_id")
+  outletId     String   @map("outlet_id")
+  currentStock Float    @map("current_stock")
+  lastUpdated  DateTime @default(now()) @map("last_updated")
+
+  ingredient Ingredient @relation(fields: [ingredientId], references: [id])
+  outlet     Outlet     @relation(fields: [outletId], references: [id])
+
+  @@unique([ingredientId, outletId])
+  @@map("ingredient_stocks")
+}
+
+model Recipe {
+  id             String @id @default(cuid())
+  menuItemId     String @map("menu_item_id")
+  ingredientId   String @map("ingredient_id")
+  quantityNeeded Float  @map("quantity_needed")
+
+  menuItem   MenuItem   @relation(fields: [menuItemId], references: [id])
+  ingredient Ingredient @relation(fields: [ingredientId], references: [id])
+
+  @@unique([menuItemId, ingredientId])
+  @@map("recipes")
+}
+
+model StockMovement {
+  id            String            @id @default(cuid())
+  ingredientId  String            @map("ingredient_id")
+  outletId      String            @map("outlet_id")
+  movementType  StockMovementType @map("movement_type")
+  quantity      Float
+  referenceType String?           @map("reference_type")
+  referenceId   String?           @map("reference_id")
+  notes         String?
+  supplierId    String?           @map("supplier_id")
+  createdById   String            @map("created_by")
+  createdAt     DateTime          @default(now()) @map("created_at")
+
+  ingredient Ingredient @relation(fields: [ingredientId], references: [id])
+  outlet     Outlet     @relation(fields: [outletId], references: [id])
+  supplier   Supplier?  @relation(fields: [supplierId], references: [id])
+  createdBy  User       @relation(fields: [createdById], references: [id])
+
+  @@map("stock_movements")
+}
+
+model Supplier {
+  id            String  @id @default(cuid())
+  name          String
+  contactPerson String  @map("contact_person")
+  phone         String
+  email         String?
+  leadTimeDays  Int     @default(3) @map("lead_time_days")
+  isActive      Boolean @default(true) @map("is_active")
+
+  stockMovements StockMovement[]
+  purchaseOrders PurchaseOrder[]
+
+  @@map("suppliers")
+}
+
+model LoginAudit {
+  id        String   @id @default(cuid())
+  userId    String   @map("user_id")
+  action    String
+  ipAddress String?  @map("ip_address")
+  createdAt DateTime @default(now()) @map("created_at")
+
+  user User @relation(fields: [userId], references: [id])
+
+  @@map("login_audits")
+}
+
+model Reservation {
+  id           String            @id @default(cuid())
+  outletId     String            @map("outlet_id")
+  tableId      String?           @map("table_id")
+  customerName String            @map("customer_name")
+  phone        String
+  partySize    Int               @map("party_size")
+  reservedAt   DateTime          @map("reserved_at")
+  status       ReservationStatus @default(pending)
+  notes        String?
+  createdAt    DateTime          @default(now()) @map("created_at")
+
+  outlet Outlet @relation(fields: [outletId], references: [id])
+  table  Table? @relation(fields: [tableId], references: [id])
+
+  @@map("reservations")
+}
+
+model PurchaseOrder {
+  id          String              @id @default(cuid())
+  outletId    String              @map("outlet_id")
+  supplierId  String              @map("supplier_id")
+  status      PurchaseOrderStatus @default(draft)
+  totalAmount Float               @default(0) @map("total_amount")
+  notes       String?
+  createdById String              @map("created_by")
+  createdAt   DateTime            @default(now()) @map("created_at")
+
+  outlet   Outlet              @relation(fields: [outletId], references: [id])
+  supplier Supplier            @relation(fields: [supplierId], references: [id])
+  items    PurchaseOrderItem[]
+
+  @@map("purchase_orders")
+}
+
+model PurchaseOrderItem {
+  id              String  @id @default(cuid())
+  purchaseOrderId String  @map("purchase_order_id")
+  ingredientId    String  @map("ingredient_id")
+  quantity        Float
+  unitPrice       Float   @default(0) @map("unit_price")
+
+  purchaseOrder PurchaseOrder @relation(fields: [purchaseOrderId], references: [id], onDelete: Cascade)
+  ingredient    Ingredient    @relation(fields: [ingredientId], references: [id])
+
+  @@map("purchase_order_items")
+}
+
+model DeliveryOrder {
+  id              String              @id @default(cuid())
+  outletId        String              @map("outlet_id")
+  platform        DeliveryPlatform
+  externalId      String              @map("external_id")
+  customerName    String              @map("customer_name")
+  customerPhone   String?             @map("customer_phone")
+  itemsJson       String              @map("items_json")
+  totalAmount     Float               @map("total_amount")
+  status          DeliveryOrderStatus @default(pending)
+  orderId         String?             @map("order_id")
+  createdAt       DateTime            @default(now()) @map("created_at")
+
+  outlet Outlet @relation(fields: [outletId], references: [id])
+
+  @@unique([platform, externalId])
+  @@map("delivery_orders")
+}
+
+model Shift {
+  id          String      @id @default(cuid())
+  userId      String      @map("user_id")
+  outletId    String      @map("outlet_id")
+  status      ShiftStatus @default(open)
+  openingCash Float       @default(0) @map("opening_cash")
+  closingCash Float?      @map("closing_cash")
+  totalSales  Float       @default(0) @map("total_sales")
+  openedAt    DateTime    @default(now()) @map("opened_at")
+  closedAt    DateTime?   @map("closed_at")
+
+  user User @relation(fields: [userId], references: [id])
+  outlet Outlet @relation(fields: [outletId], references: [id])
+
+  @@map("shifts")
+}
+
+model TransactionLog {
+  id            String   @id @default(cuid())
+  orderId       String?  @map("order_id")
+  action        String
+  details       String
+  performedById String   @map("performed_by")
+  createdAt     DateTime @default(now()) @map("created_at")
+
+  order       Order? @relation(fields: [orderId], references: [id])
+  performedBy User   @relation(fields: [performedById], references: [id])
+
+  @@map("transaction_logs")
+}
+
+model Setting {
+  id          String @id @default(cuid())
+  key         String @unique
+  value       String
+  description String?
+
+  @@map("settings")
+}
