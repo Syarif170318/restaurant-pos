@@ -150,4 +150,4 @@ Manual testing checklist: [`docs/RDP_CHECKLIST_MANUAL_TESTING.md`](docs/RDP_CHEC
 
 ## Author
 
-**Syarif Hidayatullah** — [GitHub](https://github.com/Syarif170318) · [LinkedIn](https://www.linkedin.com/in/syarif-hidayatullah)
+**Syarif Hidayatullah** — [GitHub](https://github.com/Syarif170318) · [Email](mailto:hidayatullahsrf@gmail.com)
