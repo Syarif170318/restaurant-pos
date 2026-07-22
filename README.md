@@ -8,6 +8,8 @@
 
 Full-stack **Restaurant & Café POS** — web dashboard + mobile app, shared MySQL backend.
 
+![Tests](https://img.shields.io/badge/API_Smoke_Tests-33_scenarios-00C853?style=for-the-badge)
+
 ![Dashboard Preview](docs/screenshots/dashboard-preview.jpeg)
 
 ---
